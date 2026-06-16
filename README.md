@@ -105,6 +105,56 @@ Recency filtering needs a debuggable browser. Start Edge or Chrome with remote d
 
 Then add `skill/SKILL.md` to your Claude skills and run it.
 
+## Usage
+
+You drive it in plain language through Claude. The skill runs the **find → draft → review → send → learn** loop and always stops for your approval before anything is sent.
+
+### Find and draft
+
+> "Find 10 marketing directors at B2B SaaS companies who posted in the last 24 hours, and draft a connection note for each based on what they actually posted."
+
+Claude searches your ICP, keeps only recently-active people, reads each one's recent posts, writes a personalized opener, and shows you the queue. Nothing has sent yet.
+
+### Review and send (the gate)
+
+> "Show me the drafts."
+
+…you read them…
+
+> "Send 1, 3, and 5. Reject the rest."
+
+Only the approved drafts send, within your daily caps and with human-paced delays. Anything held by a cap stays pending for the next window.
+
+### Tune the targeting or the voice
+
+> "Only keep people based in the US, and rewrite the openers shorter and less salesy, no pitch in the first touch."
+
+### Run a multi-step campaign
+
+> "Enroll the rest in a 3-step sequence: connect today, a soft value message on day 3, one specific ask on day 7."
+
+Then, on a later day:
+
+> "Draft any campaign follow-ups that are due."
+
+It drafts the due steps and stops at the review gate again. It never auto-sends a follow-up.
+
+### See what is working
+
+> "How are my campaigns doing, and what should I change next round?"
+
+Claude reads your accept and reply rates plus the opener-length breakdown and gives you concrete tweaks.
+
+### Housekeeping (rarely needed)
+
+> "Refresh my LinkedIn cookies."  (also happens automatically when they go stale)
+
+> "Run a health check on search."  → `linknav_doctor`
+
+> "What's my remaining daily budget?"  → `linknav_auth_status`
+
+These prompts map to the tools below. You can also call any tool directly if you prefer.
+
 ## Tools
 
 | Tool | What it does |
