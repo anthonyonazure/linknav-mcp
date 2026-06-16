@@ -12,6 +12,7 @@
 // are best-effort from the surrounding card text.
 
 import { config, hasSearchCookie } from "../config.js";
+import { refreshCookiesFromBrowser } from "../refresh.js";
 import type { VoyagerProfile } from "./voyager.js";
 
 const SEARCH_UA =
@@ -137,14 +138,35 @@ export function parseSearchHtml(html: string): VoyagerProfile[] {
   return out;
 }
 
-/** Fetch + parse one page of SSR people-search results. page is 1-based. */
+/**
+ * Fetch + parse one page of SSR people-search. page is 1-based. Self-healing: if
+ * cookies are missing or stale (a login-wall bounce), it pulls fresh cookies from
+ * the live logged-in browser and retries once — so you never hand-copy cookies.
+ */
 export async function searchPeopleSsr(keywords: string, page = 1): Promise<VoyagerProfile[]> {
   if (!hasSearchCookie()) {
-    throw new SearchCookieError(
-      "SSR search needs the full cookie jar. Set LINKNAV_COOKIE in .env to your complete " +
-        "linkedin.com cookie string (li_at alone gets bounced through the login wall)."
-    );
+    const r = await refreshCookiesFromBrowser();
+    if (!hasSearchCookie()) {
+      throw new SearchCookieError(
+        "SSR search needs the full cookie jar and auto-refresh could not get it" +
+          (r.reason ? ` (${r.reason})` : "") +
+          ". Open Edge/Chrome logged into LinkedIn with remote debugging, or set LINKNAV_COOKIE in .env."
+      );
+    }
   }
+  try {
+    return await searchOnce(keywords, page);
+  } catch (e) {
+    // Stale-cookie wall: pull fresh cookies from the browser and retry once.
+    if (e instanceof SearchCookieError) {
+      const r = await refreshCookiesFromBrowser({ force: true });
+      if (r.ok) return await searchOnce(keywords, page);
+    }
+    throw e;
+  }
+}
+
+async function searchOnce(keywords: string, page = 1): Promise<VoyagerProfile[]> {
   // Encode space as %20 (not +) to avoid LinkedIn's query-normalization redirect.
   const kw = encodeURIComponent(keywords);
   let url =
@@ -196,7 +218,14 @@ export async function searchPeopleSsr(keywords: string, page = 1): Promise<Voyag
     html = await res.text();
     break;
   }
-  if (!html) throw new Error("Search did not resolve to a page within the redirect budget.");
+  // Exhausting the redirect budget means LinkedIn kept 302-ing to the same URL
+  // waiting for a valid session cookie — the classic stale-cookie signature. Throw
+  // SearchCookieError so the caller can auto-refresh from the browser and retry.
+  if (!html) {
+    throw new SearchCookieError(
+      "Search hit a redirect loop (stale or invalid session cookies)."
+    );
+  }
   if (/uas\/login|authwall/i.test(html.slice(0, 2000)) && !/search\/results/i.test(html.slice(0, 4000))) {
     throw new SearchCookieError("Search landed on the login wall. Refresh LINKNAV_COOKIE.");
   }

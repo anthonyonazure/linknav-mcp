@@ -1,6 +1,28 @@
 import { config, hasCredentials } from "../config.js";
+import { refreshCookiesFromBrowser } from "../refresh.js";
 
 const VOYAGER_BASE = "https://www.linkedin.com/voyager/api";
+
+/**
+ * Run a request and, on an auth bounce or a transient network/redirect-loop error
+ * (the signature of rotated cookies), pull fresh cookies from the live browser and
+ * retry once. The thunk re-reads baseHeaders() each call, so the retry uses the
+ * refreshed cookies.
+ */
+async function withCookieRetry<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    const msg = (e as Error)?.message ?? "";
+    const auth = e instanceof LinkedInAuthError;
+    const transient = /redirect count exceeded|fetch failed|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket hang up/i.test(msg);
+    if (auth || transient) {
+      const r = await refreshCookiesFromBrowser({ force: auth });
+      if (r.ok) return await fn();
+    }
+    throw e;
+  }
+}
 
 export class LinkedInAuthError extends Error {
   constructor(msg: string) {
@@ -75,19 +97,24 @@ export async function voyagerGet(path: string, query?: Record<string, string>): 
   requireCreds();
   const qs = query ? "?" + new URLSearchParams(query).toString() : "";
   const url = `${VOYAGER_BASE}${path}${qs}`;
-  const res = await fetch(url, { method: "GET", headers: baseHeaders() });
-  return handle(res, `GET ${path}`);
+  return withCookieRetry(async () =>
+    handle(await fetch(url, { method: "GET", headers: baseHeaders() }), `GET ${path}`)
+  );
 }
 
 export async function voyagerPost(path: string, body: unknown): Promise<any> {
   requireCreds();
   const url = `${VOYAGER_BASE}${path}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { ...baseHeaders(), "content-type": "application/json; charset=UTF-8" },
-    body: JSON.stringify(body),
-  });
-  return handle(res, `POST ${path}`);
+  return withCookieRetry(async () =>
+    handle(
+      await fetch(url, {
+        method: "POST",
+        headers: { ...baseHeaders(), "content-type": "application/json; charset=UTF-8" },
+        body: JSON.stringify(body),
+      }),
+      `POST ${path}`
+    )
+  );
 }
 
 /**

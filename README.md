@@ -66,22 +66,25 @@ A `queryId`-rotation detector (`linknav_doctor`) and a `linknav_set_search_query
 git clone https://github.com/anthonyonazure/linknav-mcp.git
 cd linknav-mcp
 npm install
-cp .env.example .env     # fill in your cookies (see below)
+cp .env.example .env     # see Cookies below — mostly automatic
+npm run cookies          # pull fresh cookies from your logged-in browser into .env
 npm run auth             # smoke test: prints your identity + remaining budget
 npm run doctor           # checks search health / queryId rotation
 npm test                 # unit tests (no network, no cookies needed)
 npm start                # run the MCP server on stdio
 ```
 
-### Cookies
+### Cookies (mostly automatic)
 
-Search needs your **full** linkedin.com cookie string, not just two cookies (a `li_at`-only request bounces through the login wall forever).
+Search needs your **full** linkedin.com cookie string, not just two cookies (a `li_at`-only request bounces through the login wall forever). LinkedIn also rotates session cookies every few minutes.
 
-1. Log into linkedin.com.
-2. DevTools (F12) → Network → click any `linkedin.com` request → Request Headers → copy the entire `cookie` value.
-3. Paste it into `LINKNAV_COOKIE` in `.env`. Also set `LINKNAV_LI_AT` and `LINKNAV_JSESSIONID` from the same jar.
+You do **not** hand-copy cookies. As long as you have a debuggable browser open and logged into LinkedIn (see below), LinkNav pulls the current cookies straight from it:
 
-LinkedIn rotates session cookies every few minutes. When search starts returning a 302 redirect loop, re-copy `LINKNAV_COOKIE`. See [Maintenance](#maintenance).
+- **Automatic self-heal:** when search or the API detects stale cookies (a 302 redirect loop or an auth bounce), it pulls fresh cookies from your browser and retries, transparently.
+- **One command:** `npm run cookies` grabs them on demand and writes them to `.env`.
+- **From Claude:** the `linknav_refresh_cookies` tool does the same mid-workflow.
+
+Manual fallback (only if you run headless with no browser): copy the entire `cookie` header from a logged-in `linkedin.com` request (DevTools → Network → Request Headers) into `LINKNAV_COOKIE`, plus `LINKNAV_LI_AT` and `LINKNAV_JSESSIONID` from the same jar.
 
 ### Browser for activity (optional but recommended)
 
@@ -107,6 +110,7 @@ Then add `skill/SKILL.md` to your Claude skills and run it.
 | Tool | What it does |
 | --- | --- |
 | `linknav_auth_status` | Verify cookies, return identity plus remaining daily budget |
+| `linknav_refresh_cookies` | Pull fresh cookies from your live logged-in browser (also happens automatically on staleness) |
 | `linknav_doctor` | Probe search health and detect a rotated queryId; auto-heals when it can |
 | `linknav_set_search_query_id` | Manually set a fresh queryId when auto-discovery cannot |
 | `linknav_find_leads` | Search an ICP, keep only leads active within `recencyHours` |
@@ -136,8 +140,8 @@ Rolling-24h ceilings, refused (not queued) when hit. Override in `.env`.
 
 LinkedIn changes its internals without notice. The brittle parts live in [`search-ssr.ts`](src/linkedin/search-ssr.ts), [`activity-cdp.ts`](src/linkedin/activity-cdp.ts), and [`voyager.ts`](src/linkedin/voyager.ts).
 
-- **Search returns a 302 loop or nothing:** your cookie jar went stale. Refresh `LINKNAV_COOKIE`.
-- **`auth_status` fails with 401/403:** re-copy `li_at` and `JSESSIONID`.
+- **Search returns a 302 loop or nothing:** stale cookies. It self-heals from your browser automatically; if no browser is reachable, run `npm run cookies` or set `LINKNAV_COOKIE`.
+- **`auth_status` fails with 401/403:** the API auto-refreshes from your browser; otherwise run `npm run cookies`.
 - **`find_leads` returns people but no recency filtering:** no debuggable browser was reachable. Start one, or set `LINKNAV_USE_CDP_ACTIVITY=true`.
 - **Search empty after a LinkedIn change:** run `linknav_doctor`.
 

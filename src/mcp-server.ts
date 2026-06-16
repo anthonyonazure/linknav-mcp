@@ -14,6 +14,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 
 import { hasCredentials } from "./config.js";
+import { refreshCookiesFromBrowser } from "./refresh.js";
 import { remainingBudget } from "./linkedin/rateLimiter.js";
 import { getMe, checkSearchQueryId, setSearchQueryId, resolveSearchQueryId } from "./linkedin/voyager.js";
 import { findLeads, listLeads, getLead, refreshActivity } from "./leads.js";
@@ -55,6 +56,22 @@ server.tool(
       return text({ authenticated: true, me, remainingBudget: remainingBudget() });
     } catch (e) {
       return fail(`Auth check failed: ${(e as Error).message}`);
+    }
+  }
+);
+
+server.tool(
+  "linknav_refresh_cookies",
+  "Pull fresh LinkedIn cookies from your live logged-in browser (Edge/Chrome with remote debugging) and load them, replacing hand-copying. Search and the API also auto-refresh on their own when cookies go stale; use this to force it.",
+  {},
+  async () => {
+    const r = await refreshCookiesFromBrowser({ force: true });
+    if (!r.ok) return fail(`Could not refresh cookies: ${r.reason}`);
+    try {
+      const me = await getMe();
+      return text({ refreshed: true, me });
+    } catch (e) {
+      return text({ refreshed: true, note: `cookies loaded; identity check said: ${(e as Error).message}` });
     }
   }
 );

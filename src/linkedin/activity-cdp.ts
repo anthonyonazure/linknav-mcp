@@ -33,6 +33,32 @@ export function isCdpAvailable(): boolean {
   return browserWsUrl() !== null;
 }
 
+/**
+ * Pull the current linkedin.com cookies from the live logged-in browser. This is how
+ * we auto-refresh when LinkedIn rotates the session, with no hand-copying. Returns
+ * null if no debuggable browser is reachable or no LinkedIn cookies are present.
+ */
+export async function getAllLinkedInCookies(): Promise<
+  { jar: string; liAt: string; jsessionid: string } | null
+> {
+  if (!isCdpAvailable()) return null;
+  const cdp = await Cdp.connect();
+  try {
+    const r = await cdp.send("Storage.getCookies"); // browser-level: all cookies
+    const cookies: any[] = (r.result?.cookies ?? []).filter((c: any) =>
+      /(^|\.)linkedin\.com$/.test(c.domain)
+    );
+    if (!cookies.length) return null;
+    const jar = cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+    const liAt = cookies.find((c) => c.name === "li_at")?.value ?? "";
+    const jsessionid = (cookies.find((c) => c.name === "JSESSIONID")?.value ?? "").replace(/^"|"$/g, "");
+    if (!liAt) return null; // not logged in
+    return { jar, liAt, jsessionid };
+  } finally {
+    cdp.close();
+  }
+}
+
 /** Parse a LinkedIn relative time label ("6d", "1w", "3h", "45m", "2mo", "now") to epoch ms. */
 export function parseRelativeTime(label: string, nowMs: number): number | null {
   const s = (label || "").trim().toLowerCase();

@@ -38,13 +38,26 @@ const DEFAULT_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
   "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
+// Cookie state is MUTABLE at runtime: LinkedIn rotates session cookies every few
+// minutes, and we re-pull them from the live browser on the fly (see refresh.ts).
+// Exposed as getters on `config` so every reader sees the current value with no churn.
+let _liAt = process.env.LINKNAV_LI_AT ?? "";
+let _jsessionid = (process.env.LINKNAV_JSESSIONID ?? "").replace(/^"|"$/g, "");
+let _cookieJar = process.env.LINKNAV_COOKIE ?? "";
+
+/** Update the in-memory cookies (e.g. after pulling fresh ones from the browser). */
+export function setCookies(next: { jar?: string; liAt?: string; jsessionid?: string }): void {
+  if (next.jar) _cookieJar = next.jar;
+  if (next.liAt) _liAt = next.liAt;
+  if (next.jsessionid) _jsessionid = next.jsessionid.replace(/^"|"$/g, "");
+}
+
 export const config = {
-  liAt: process.env.LINKNAV_LI_AT ?? "",
-  jsessionid: (process.env.LINKNAV_JSESSIONID ?? "").replace(/^"|"$/g, ""),
+  get liAt() { return _liAt; },
+  get jsessionid() { return _jsessionid; },
   // Full browser cookie jar — required for the SSR people-search HTML endpoint,
-  // which bounces a li_at-only request through the login wall. Some members are
-  // short-lived (__cf_bm, lidc), so this needs refreshing more often than li_at.
-  cookieJar: process.env.LINKNAV_COOKIE ?? "",
+  // which bounces a li_at-only request through the login wall.
+  get cookieJar() { return _cookieJar; },
   userAgent: process.env.LINKNAV_USER_AGENT ?? DEFAULT_UA,
   dbPath: process.env.LINKNAV_DB_PATH ?? join(projectRoot(), "data", "linknav.db"),
 
@@ -67,15 +80,15 @@ export const config = {
     minMs: num(process.env.LINKNAV_MIN_DELAY_MS, 3500),
     maxMs: num(process.env.LINKNAV_MAX_DELAY_MS, 12000),
   },
-} as const;
+};
 
 export function hasCredentials(): boolean {
-  return Boolean(config.liAt && config.jsessionid);
+  return Boolean(_liAt && _jsessionid);
 }
 
 /** SSR people-search needs the full cookie jar, not just li_at + JSESSIONID. */
 export function hasSearchCookie(): boolean {
-  return Boolean(config.cookieJar && config.cookieJar.includes("li_at="));
+  return Boolean(_cookieJar && _cookieJar.includes("li_at="));
 }
 
 /** Action kinds that count against rolling-24h caps. */

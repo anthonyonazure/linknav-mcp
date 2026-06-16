@@ -9,6 +9,7 @@
   "scripts": {
     "start": "tsx src/mcp-server.ts",
     "auth": "tsx src/scripts/auth-check.ts",
+    "cookies": "tsx src/scripts/refresh-cookies.ts",
     "doctor": "tsx src/scripts/doctor.ts",
     "test": "tsx src/scripts/test-rotation.ts",
     "typecheck": "tsc --noEmit"
