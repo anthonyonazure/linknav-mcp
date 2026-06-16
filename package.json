@@ -1,0 +1,33 @@
+{
+  "name": "linknav-mcp",
+  "version": "0.1.0",
+  "description": "LinkNav — a Claude MCP for ICP-driven LinkedIn lead-finding, activity-aware message drafting, draft-review sending, and campaign analytics. Voyager (cookie) backend. Personal-use outreach automation.",
+  "type": "module",
+  "bin": {
+    "linknav-mcp": "src/mcp-server.ts"
+  },
+  "scripts": {
+    "start": "tsx src/mcp-server.ts",
+    "auth": "tsx src/scripts/auth-check.ts",
+    "doctor": "tsx src/scripts/doctor.ts",
+    "test": "tsx src/scripts/test-rotation.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "author": "Anthony",
+  "license": "ISC",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "better-sqlite3": "^12.9.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^25.5.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  },
+  "allowScripts": {
+    "better-sqlite3@12.11.1": true,
+    "esbuild@0.28.1": true
+  }
+}
