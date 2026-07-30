@@ -7,12 +7,15 @@
     "linknav-mcp": "src/mcp-server.ts"
   },
   "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "tsx src/scripts/test-rotation.ts",
+    "mutation": "stryker run",
+    "check": "bun run typecheck && bun run lint",
     "start": "tsx src/mcp-server.ts",
     "auth": "tsx src/scripts/auth-check.ts",
     "cookies": "tsx src/scripts/refresh-cookies.ts",
-    "doctor": "tsx src/scripts/doctor.ts",
-    "test": "tsx src/scripts/test-rotation.ts",
-    "typecheck": "tsc --noEmit"
+    "doctor": "tsx src/scripts/doctor.ts"
   },
   "author": "Anthony",
   "license": "ISC",
@@ -22,10 +25,14 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@stryker-mutator/core": "^9.6.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.5.0",
+    "eslint": "^10.8.0",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.65.0"
   },
   "allowScripts": {
     "better-sqlite3@12.11.1": true,
