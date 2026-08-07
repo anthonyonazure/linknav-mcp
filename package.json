@@ -28,7 +28,7 @@
     "@eslint/js": "^10.0.1",
     "@stryker-mutator/core": "^9.6.1",
     "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^25.5.0",
+    "@types/node": "^26.1.2",
     "eslint": "^10.8.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
