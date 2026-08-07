@@ -68,7 +68,7 @@ function baseHeaders(): Record<string, string> {
   };
 }
 
-async function handle(res: Response, label: string): Promise<any> {
+async function handle(res: Response, label: string): Promise<unknown> {
   if (res.status === 401 || res.status === 403) {
     throw new LinkedInAuthError(
       `${label} → HTTP ${res.status}. Your li_at/JSESSIONID cookies are likely expired or invalid. ` +
@@ -87,13 +87,13 @@ async function handle(res: Response, label: string): Promise<any> {
   const text = await res.text();
   if (!text) return {};
   try {
-    return JSON.parse(text);
+    return JSON.parse(text) as unknown;
   } catch {
     return { _raw: text.slice(0, 1000) };
   }
 }
 
-export async function voyagerGet(path: string, query?: Record<string, string>): Promise<any> {
+export async function voyagerGet(path: string, query?: Record<string, string>): Promise<unknown> {
   requireCreds();
   const qs = query ? "?" + new URLSearchParams(query).toString() : "";
   const url = `${VOYAGER_BASE}${path}${qs}`;
@@ -102,7 +102,7 @@ export async function voyagerGet(path: string, query?: Record<string, string>): 
   );
 }
 
-export async function voyagerPost(path: string, body: unknown): Promise<any> {
+export async function voyagerPost(path: string, body: unknown): Promise<unknown> {
   requireCreds();
   const url = `${VOYAGER_BASE}${path}`;
   return withCookieRetry(async () =>
@@ -124,14 +124,14 @@ export async function voyagerPost(path: string, body: unknown): Promise<any> {
 export async function voyagerGraphQLRaw(
   queryId: string,
   variables: string
-): Promise<{ status: number; ok: boolean; text: string; json: any }> {
+): Promise<{ status: number; ok: boolean; text: string; json: unknown }> {
   requireCreds();
   const url = `${VOYAGER_BASE}/graphql?queryId=${encodeURIComponent(queryId)}&variables=${variables}`;
   const res = await fetch(url, { method: "GET", headers: baseHeaders() });
   const text = await res.text().catch(() => "");
-  let json: any = null;
+  let json: unknown = null;
   try {
-    json = text ? JSON.parse(text) : null;
+    json = text ? (JSON.parse(text) as unknown) : null;
   } catch {
     /* non-JSON body (often an error/HTML page) */
   }

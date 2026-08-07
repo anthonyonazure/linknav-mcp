@@ -11,6 +11,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { arr, num, str } from "./json.js";
 import type { ActivityItem } from "./voyager.js";
 
 const PORT_FILES = [
@@ -45,9 +46,9 @@ export async function getAllLinkedInCookies(): Promise<
   const cdp = await Cdp.connect();
   try {
     const r = await cdp.send("Storage.getCookies"); // browser-level: all cookies
-    const cookies: any[] = (r.result?.cookies ?? []).filter((c: any) =>
-      /(^|\.)linkedin\.com$/.test(c.domain)
-    );
+    const cookies = arr(r, "result", "cookies")
+      .map((c) => ({ name: str(c, "name"), value: str(c, "value"), domain: str(c, "domain") }))
+      .filter((c) => /(^|\.)linkedin\.com$/.test(c.domain));
     if (!cookies.length) return null;
     const jar = cookies.map((c) => `${c.name}=${c.value}`).join("; ");
     const liAt = cookies.find((c) => c.name === "li_at")?.value ?? "";
@@ -92,14 +93,23 @@ export function parseRelativeTime(label: string, nowMs: number): number | null {
 class Cdp {
   private ws: WebSocket;
   private id = 1;
-  private pending = new Map<number, (v: any) => void>();
+  private pending = new Map<number, (v: unknown) => void>();
   private constructor(ws: WebSocket) {
     this.ws = ws;
-    ws.addEventListener("message", (e: any) => {
-      const m = JSON.parse(e.data);
-      if (m.id && this.pending.has(m.id)) {
-        this.pending.get(m.id)!(m);
-        this.pending.delete(m.id);
+    ws.addEventListener("message", (e) => {
+      if (typeof e.data !== "string") return;
+      let msg: unknown;
+      try {
+        msg = JSON.parse(e.data);
+      } catch {
+        return; // CDP should only ever send JSON; ignore anything else
+      }
+      const id = num(msg, "id");
+      if (id === null) return; // an event, not a reply to one of our calls
+      const settle = this.pending.get(id);
+      if (settle) {
+        settle(msg);
+        this.pending.delete(id);
       }
     });
   }
@@ -113,13 +123,15 @@ class Cdp {
     });
     return new Cdp(ws);
   }
-  send(method: string, params: any = {}, sessionId?: string): Promise<any> {
+  send(
+    method: string,
+    params: Record<string, unknown> = {},
+    sessionId?: string
+  ): Promise<unknown> {
     return new Promise((res) => {
       const id = this.id++;
       this.pending.set(id, res);
-      const msg: any = { id, method, params };
-      if (sessionId) msg.sessionId = sessionId;
-      this.ws.send(JSON.stringify(msg));
+      this.ws.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
     });
   }
   close() {
@@ -160,15 +172,15 @@ export async function getProfileActivityCdp(
     const created = await cdp.send("Target.createTarget", {
       url: `https://www.linkedin.com/in/${encodeURIComponent(slug)}/recent-activity/all/`,
     });
-    targetId = created.result?.targetId;
+    targetId = str(created, "result", "targetId") || undefined;
     if (!targetId) throw new Error("Failed to open activity tab.");
     const att = await cdp.send("Target.attachToTarget", { targetId, flatten: true });
-    const sessionId = att.result?.sessionId;
+    const sessionId = str(att, "result", "sessionId");
     if (!sessionId) throw new Error("Failed to attach to activity tab.");
     await cdp.send("Runtime.enable", {}, sessionId);
 
     // Poll until the feed hydrates (activity nodes appear) or we time out.
-    let raw = "[]";
+    let scraped: unknown[] = [];
     const deadline = Date.now() + maxWaitMs;
     while (Date.now() < deadline) {
       await sleep(hydrateMs);
@@ -177,16 +189,23 @@ export async function getProfileActivityCdp(
         { expression: SCRAPE_EXPR, returnByValue: true, awaitPromise: true },
         sessionId
       );
-      raw = r.result?.result?.value ?? "[]";
+      const raw = str(r, "result", "result", "value");
+      if (!raw) continue;
+      let parsed: unknown;
       try {
-        if (JSON.parse(raw).length > 0) break;
-      } catch { /* keep waiting */ }
+        parsed = JSON.parse(raw);
+      } catch {
+        continue; // page still hydrating; keep waiting
+      }
+      if (Array.isArray(parsed)) {
+        scraped = parsed;
+        if (scraped.length) break;
+      }
     }
 
-    const items: Array<{ time: string; text: string }> = JSON.parse(raw);
-    return items.map((it) => ({
-      text: it.text,
-      postedAt: parseRelativeTime(it.time, nowMs),
+    return scraped.map((it) => ({
+      text: str(it, "text"),
+      postedAt: parseRelativeTime(str(it, "time"), nowMs),
       url: "",
     }));
   } finally {

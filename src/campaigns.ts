@@ -55,6 +55,15 @@ export interface DueStep {
   step: CampaignStep;
 }
 
+/** Shape of the join in dueSteps(), named so the row is typed rather than `any`. */
+interface DueRow {
+  memberId: number;
+  campaign_id: number;
+  lead_id: number;
+  current_step: number;
+  steps_json: string;
+}
+
 /** Members whose next step is due now. The caller drafts (never auto-sends) these. */
 export function dueSteps(limit = 50): DueStep[] {
   const rows = db
@@ -64,7 +73,7 @@ export function dueSteps(limit = 50): DueStep[] {
        WHERE m.status='active' AND c.status='active' AND m.next_due_at <= ?
        ORDER BY m.next_due_at ASC LIMIT ?`
     )
-    .all(now(), limit) as any[];
+    .all(now(), limit) as DueRow[];
 
   const out: DueStep[] = [];
   for (const r of rows) {
@@ -91,7 +100,7 @@ export function advanceMember(memberId: number): void {
     .prepare(
       `SELECT m.*, c.steps_json FROM campaign_members m JOIN campaigns c ON c.id=m.campaign_id WHERE m.id=?`
     )
-    .get(memberId) as any;
+    .get(memberId) as { current_step: number; steps_json: string } | undefined;
   if (!m) return;
   const steps = JSON.parse(m.steps_json) as CampaignStep[];
   const nextIndex = m.current_step + 1;
@@ -122,7 +131,7 @@ export function campaignStatus(name?: string) {
       id: c.id,
       name: c.name,
       status: c.status,
-      steps: JSON.parse(c.steps_json),
+      steps: JSON.parse(c.steps_json) as CampaignStep[],
       members: counts.reduce((acc, r) => ((acc[r.status] = r.n), acc), {} as Record<string, number>),
     };
   });
@@ -133,9 +142,14 @@ export function analytics() {
   const sent = db
     .prepare("SELECT type, COUNT(*) AS n FROM drafts WHERE status='sent' GROUP BY type")
     .all() as Array<{ type: string; n: number }>;
-  const contacted = (db.prepare("SELECT COUNT(*) AS n FROM leads WHERE status IN ('contacted','connected','replied')").get() as any).n;
-  const connected = (db.prepare("SELECT COUNT(*) AS n FROM leads WHERE status IN ('connected','replied')").get() as any).n;
-  const replied = (db.prepare("SELECT COUNT(*) AS n FROM leads WHERE status='replied'").get() as any).n;
+  const countOf = (sql: string): number => (db.prepare(sql).get() as { n: number }).n;
+  const contacted = countOf(
+    "SELECT COUNT(*) AS n FROM leads WHERE status IN ('contacted','connected','replied')"
+  );
+  const connected = countOf(
+    "SELECT COUNT(*) AS n FROM leads WHERE status IN ('connected','replied')"
+  );
+  const replied = countOf("SELECT COUNT(*) AS n FROM leads WHERE status='replied'");
   const byOpenerLen = db
     .prepare(
       `SELECT CASE WHEN LENGTH(text) < 120 THEN 'short' WHEN LENGTH(text) < 240 THEN 'medium' ELSE 'long' END AS bucket,

@@ -30,7 +30,12 @@ jobs:
           out=$(bun test --coverage 2>&1); code=$?
           set -e
           echo "$out"
-          if echo "$out" | grep -q "0 test files matching"; then
+          # Bun changed this wording: older builds said "0 test files matching",
+          # current ones say "No tests found!". Matching only the old string made
+          # the NOT_APPLICABLE escape hatch silently stop working, so a repo with
+          # no bun-discoverable test files failed the gate instead of being
+          # recorded as not applicable.
+          if echo "$out" | grep -qE "0 test files matching|No tests found"; then
             echo "GATE tests = NOT_APPLICABLE (no test files in this repo)" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
