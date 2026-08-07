@@ -9,6 +9,7 @@ import {
   voyagerGraphQLRaw,
   voyagerRawGet,
 } from "./client.js";
+import { arr, num, prop, scalar, str } from "./json.js";
 import { config, hasCredentials, hasSearchCookie } from "../config.js";
 import { getSetting, setSetting } from "../db.js";
 import { searchPeopleSsr } from "./search-ssr.js";
@@ -162,7 +163,7 @@ export async function checkSearchQueryId(attemptHeal = true): Promise<DoctorRepo
 
   const probe = await voyagerGraphQLRaw(queryId, buildSearchVariables("engineer", 0, 5));
   const count = probe.json ? parsePeople(probe.json).length : 0;
-  let health = classifySearchResponse(probe.status, probe.text, count);
+  const health = classifySearchResponse(probe.status, probe.text, count);
   setSetting(SETTING_QUERY_ID_CHECKED, String(Date.now()));
 
   if (health === "stale_query_id" && attemptHeal) {
@@ -220,13 +221,12 @@ export interface ActivityItem {
 export async function getMe(): Promise<{ urn: string; firstName: string; lastName: string }> {
   const data = await voyagerGet("/me");
   const mini =
-    data?.included?.find((x: any) => x?.$type?.includes("MiniProfile")) ??
-    data?.miniProfile ??
-    {};
+    arr(data, "included").find((x) => str(x, "$type").includes("MiniProfile")) ??
+    prop(data, "miniProfile");
   return {
-    urn: String(mini?.entityUrn ?? mini?.objectUrn ?? data?.plainId ?? ""),
-    firstName: String(mini?.firstName ?? ""),
-    lastName: String(mini?.lastName ?? ""),
+    urn: scalar(mini, "entityUrn") || scalar(mini, "objectUrn") || scalar(data, "plainId"),
+    firstName: str(mini, "firstName"),
+    lastName: str(mini, "lastName"),
   };
 }
 
@@ -291,26 +291,31 @@ export async function searchPeople(
   return res.json ? parsePeople(res.json) : [];
 }
 
-function parsePeople(data: any): VoyagerProfile[] {
+function parsePeople(data: unknown): VoyagerProfile[] {
   const out: VoyagerProfile[] = [];
-  const included: any[] = Array.isArray(data?.included) ? data.included : [];
-  for (const node of included) {
-    const t = String(node?.$type ?? "");
+  for (const node of arr(data, "included")) {
+    const t = str(node, "$type");
     if (!t.includes("EntityResultViewModel") && !t.includes("MiniProfile")) continue;
-    const urn = String(node?.entityUrn ?? node?.targetUrn ?? "");
-    if (!urn || !urn.includes("fsd_profile") && !urn.includes("member")) continue;
-    const title = textOf(node?.title) || `${node?.firstName ?? ""} ${node?.lastName ?? ""}`.trim();
+    const urn = scalar(node, "entityUrn") || scalar(node, "targetUrn");
+    if (!urn || (!urn.includes("fsd_profile") && !urn.includes("member"))) continue;
+    const nodeFirst = str(node, "firstName");
+    const nodeLast = str(node, "lastName");
+    const title = textOf(prop(node, "title")) || `${nodeFirst} ${nodeLast}`.trim();
     const [firstName, ...rest] = title.split(" ");
+    const publicIdentifier = scalar(node, "publicIdentifier");
     out.push({
       urn,
-      publicId: String(node?.publicIdentifier ?? slugFromUrn(urn)),
-      firstName: node?.firstName ?? firstName ?? "",
-      lastName: node?.lastName ?? rest.join(" ") ?? "",
-      headline: textOf(node?.primarySubtitle) || String(node?.occupation ?? node?.headline ?? ""),
-      location: textOf(node?.secondarySubtitle) || "",
+      publicId: publicIdentifier || slugFromUrn(urn),
+      firstName: nodeFirst || firstName || "",
+      lastName: nodeLast || rest.join(" "),
+      headline:
+        textOf(prop(node, "primarySubtitle")) ||
+        scalar(node, "occupation") ||
+        scalar(node, "headline"),
+      location: textOf(prop(node, "secondarySubtitle")),
       company: "",
       title: "",
-      profileUrl: profileUrlFromUrn(urn, String(node?.publicIdentifier ?? "")),
+      profileUrl: profileUrlFromUrn(urn, publicIdentifier),
     });
   }
   return out;
@@ -325,15 +330,16 @@ export async function getProfileActivity(publicId: string, count = 5): Promise<A
     moduleKey: "member-shares:phone",
   });
   const items: ActivityItem[] = [];
-  const included: any[] = Array.isArray(data?.included) ? data.included : [];
-  for (const node of included) {
+  for (const node of arr(data, "included")) {
     const commentary =
-      node?.commentary?.text?.text ?? node?.commentary?.text ?? node?.text?.text;
-    if (typeof commentary === "string" && commentary.trim()) {
+      str(node, "commentary", "text", "text") ||
+      str(node, "commentary", "text") ||
+      str(node, "text", "text");
+    if (commentary.trim()) {
       items.push({
         text: commentary.trim(),
         postedAt: extractTimestamp(node),
-        url: String(node?.permalink ?? node?.url ?? ""),
+        url: scalar(node, "permalink") || scalar(node, "url"),
       });
     }
     if (items.length >= count) break;
@@ -373,12 +379,9 @@ export async function sendMessage(profileUrn: string, text: string): Promise<voi
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────
-function textOf(v: any): string {
-  if (!v) return "";
+function textOf(v: unknown): string {
   if (typeof v === "string") return v;
-  if (typeof v?.text === "string") return v.text;
-  if (typeof v?.text?.text === "string") return v.text.text;
-  return "";
+  return str(v, "text") || str(v, "text", "text");
 }
 function slugFromUrn(urn: string): string {
   const m = urn.match(/:([^:]+)$/);
@@ -388,10 +391,8 @@ function profileUrlFromUrn(urn: string, publicId: string): string {
   if (publicId) return `https://www.linkedin.com/in/${publicId}/`;
   return `https://www.linkedin.com/in/${slugFromUrn(urn)}/`;
 }
-function extractTimestamp(node: any): number | null {
-  const t = node?.createdAt ?? node?.publishedAt ?? node?.actor?.subDescription?.accessibilityText;
-  const n = typeof t === "number" ? t : NaN;
-  return Number.isFinite(n) ? n : null;
+function extractTimestamp(node: unknown): number | null {
+  return num(node, "createdAt") ?? num(node, "publishedAt");
 }
 function pseudoTrackingId(): string {
   // 16-byte tracking id; value is cosmetic for our purposes.

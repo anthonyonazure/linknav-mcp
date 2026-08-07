@@ -1,18 +1,21 @@
 {
   "name": "linknav-mcp",
   "version": "0.1.0",
-  "description": "LinkNav — a Claude MCP for ICP-driven LinkedIn lead-finding, activity-aware message drafting, draft-review sending, and campaign analytics. Voyager (cookie) backend. Personal-use outreach automation.",
+  "description": "LinkNav \u2014 a Claude MCP for ICP-driven LinkedIn lead-finding, activity-aware message drafting, draft-review sending, and campaign analytics. Voyager (cookie) backend. Personal-use outreach automation.",
   "type": "module",
   "bin": {
     "linknav-mcp": "src/mcp-server.ts"
   },
   "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "tsx src/scripts/test-rotation.ts",
+    "mutation": "stryker run",
+    "check": "bun run typecheck && bun run lint",
     "start": "tsx src/mcp-server.ts",
     "auth": "tsx src/scripts/auth-check.ts",
     "cookies": "tsx src/scripts/refresh-cookies.ts",
-    "doctor": "tsx src/scripts/doctor.ts",
-    "test": "tsx src/scripts/test-rotation.ts",
-    "typecheck": "tsc --noEmit"
+    "doctor": "tsx src/scripts/doctor.ts"
   },
   "author": "Anthony",
   "license": "ISC",
@@ -22,13 +25,24 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@stryker-mutator/core": "^9.6.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.5.0",
+    "eslint": "^10.8.0",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.65.0"
   },
   "allowScripts": {
     "better-sqlite3@12.11.1": true,
     "esbuild@0.28.1": true
+  },
+  "overrides": {
+    "@hono/node-server": ">=2.1.0",
+    "fast-uri": ">=4.1.2",
+    "hono": ">=4.13.1",
+    "ip-address": ">=10.4.0",
+    "qs": ">=6.15.3"
   }
 }

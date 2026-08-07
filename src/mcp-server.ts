@@ -17,7 +17,7 @@ import { hasCredentials } from "./config.js";
 import { refreshCookiesFromBrowser } from "./refresh.js";
 import { remainingBudget } from "./linkedin/rateLimiter.js";
 import { getMe, checkSearchQueryId, setSearchQueryId, resolveSearchQueryId } from "./linkedin/voyager.js";
-import { findLeads, listLeads, getLead, refreshActivity } from "./leads.js";
+import { findLeads, listLeads, refreshActivity } from "./leads.js";
 import { createDraft, listDrafts, approveDrafts, rejectDrafts } from "./drafts.js";
 import {
   createCampaign,
@@ -27,7 +27,6 @@ import {
   campaignStatus,
   analytics,
   getCampaignByName,
-  type CampaignStep,
 } from "./campaigns.js";
 
 const server = new McpServer({ name: "linknav", version: "0.1.0" });
@@ -94,7 +93,7 @@ server.tool(
   "linknav_set_search_query_id",
   "Manually set the people-search queryId (persisted) when LinkedIn rotates it and auto-discovery can't recover it. Copy the value starting 'voyagerSearchDashClusters.' from a real People-search graphql request in DevTools.",
   { queryId: z.string().describe("e.g. voyagerSearchDashClusters.abc123...") },
-  async ({ queryId }) => {
+  ({ queryId }) => {
     try {
       setSearchQueryId(queryId);
       return text({ ok: true, queryId: resolveSearchQueryId(), note: "Stored. Run linknav_doctor to confirm." });
@@ -141,7 +140,7 @@ server.tool(
   "linknav_list_leads",
   "List stored leads, optionally filtered by status (new|drafted|contacted|connected|replied|skipped).",
   { status: z.string().optional(), limit: z.number().default(50) },
-  async ({ status, limit }) => text(listLeads(status, limit))
+  ({ status, limit }) => text(listLeads(status, limit))
 );
 
 // ── draft + review ────────────────────────────────────────────────────────
@@ -154,7 +153,7 @@ server.tool(
     text: z.string().describe("The message. Connect notes are capped at 300 chars."),
     rationale: z.string().optional().describe("Why this opener, for your review."),
   },
-  async (a) => {
+  (a) => {
     try {
       return text(createDraft({ leadId: a.leadId, type: a.type, text: a.text, rationale: a.rationale }));
     } catch (e) {
@@ -167,7 +166,7 @@ server.tool(
   "linknav_list_drafts",
   "List drafts by status (default pending) for review before sending.",
   { status: z.string().default("pending"), limit: z.number().default(100) },
-  async ({ status, limit }) => text(listDrafts(status, limit))
+  ({ status, limit }) => text(listDrafts(status, limit))
 );
 
 server.tool(
@@ -184,7 +183,7 @@ server.tool(
   "linknav_reject_drafts",
   "Reject drafts by id so they are never sent.",
   { ids: z.array(z.number()).min(1) },
-  async ({ ids }) => text({ rejected: rejectDrafts(ids) })
+  ({ ids }) => text({ rejected: rejectDrafts(ids) })
 );
 
 // ── campaigns ─────────────────────────────────────────────────────────────
@@ -205,10 +204,10 @@ server.tool(
       )
       .min(1),
   },
-  async ({ name, icp, leadIds, steps }) => {
+  ({ name, icp, leadIds, steps }) => {
     try {
       const existing = getCampaignByName(name);
-      const c = existing ?? createCampaign(name, icp, steps as CampaignStep[]);
+      const c = existing ?? createCampaign(name, icp, steps);
       const enrolled = enroll(c.id, leadIds);
       return text({ campaign: c.name, enrolled });
     } catch (e) {
@@ -221,7 +220,7 @@ server.tool(
   "linknav_run_due_steps",
   "Return campaign steps that are due now so you can draft them. Drafts only; nothing sends. Call linknav_draft_message for each, then advance via this tool's returned memberIds.",
   { limit: z.number().default(50) },
-  async ({ limit }) => {
+  ({ limit }) => {
     const due = dueSteps(limit);
     for (const d of due) advanceMember(d.memberId); // advance scheduling; drafting is the caller's job
     return text({
@@ -235,14 +234,14 @@ server.tool(
   "linknav_campaign_status",
   "Show campaign membership counts and steps. Omit name for all campaigns.",
   { name: z.string().optional() },
-  async ({ name }) => text(campaignStatus(name))
+  ({ name }) => text(campaignStatus(name))
 );
 
 server.tool(
   "linknav_campaign_analytics",
   "Aggregate outreach analytics: sent counts, accept/reply rates, opener-length breakdown. Returns data; turn it into recommendations for the next round.",
   {},
-  async () => text(analytics())
+  () => text(analytics())
 );
 
 const transport = new StdioServerTransport();

@@ -25,4 +25,9 @@ async function main() {
   }
 }
 
-main();
+// Top-level entry point: nothing can await it, so mark the rejection path
+// explicitly rather than leaving an unhandled promise.
+main().catch((e: unknown) => {
+  console.error(e instanceof Error ? e.message : String(e));
+  process.exitCode = 1;
+});
