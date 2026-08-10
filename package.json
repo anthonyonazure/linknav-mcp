@@ -1,7 +1,7 @@
 {
   "name": "linknav-mcp",
   "version": "0.1.0",
-  "description": "LinkNav \u2014 a Claude MCP for ICP-driven LinkedIn lead-finding, activity-aware message drafting, draft-review sending, and campaign analytics. Voyager (cookie) backend. Personal-use outreach automation.",
+  "description": "LinkNav — a Claude MCP for ICP-driven LinkedIn lead-finding, activity-aware message drafting, draft-review sending, and campaign analytics. Voyager (cookie) backend. Personal-use outreach automation.",
   "type": "module",
   "bin": {
     "linknav-mcp": "src/mcp-server.ts"
