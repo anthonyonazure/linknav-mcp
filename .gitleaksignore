@@ -1,0 +1,14 @@
+# Verified false positive, excused by exact fingerprint.
+#
+# The flagged 14 characters are an IMPORTED IDENTIFIER, not a value:
+# 
+#   import { getAllLinkedInCookies, <name> } from "./linkedin/activity-cdp.js";
+# 
+# gitleaks' linkedin-client-id rule matches the shape of the symbol name. There is
+# no credential on that line and never was.
+#
+# The entry below is commit:file:rule:line, so it excuses this one occurrence
+# in this one commit. A real credential added tomorrow still fails the gate.
+# Ignoring the file, or disabling the rule, would trade a false alarm for a
+# blind spot.
+ff90451b5381c8f370736d000712c39fda06a414:src/refresh.ts:linkedin-client-id:4
