@@ -31,7 +31,7 @@
     "@types/node": "^25.5.0",
     "eslint": "^10.8.0",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3",
+    "typescript": "^7.0.2",
     "typescript-eslint": "^8.65.0"
   },
   "allowScripts": {
